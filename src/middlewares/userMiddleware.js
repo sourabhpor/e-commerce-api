@@ -44,3 +44,4 @@ const checkLogin = async (req, res, next) => {
   }
 };
 export default { checkEmailExists, checkLogin };
+// kjlas
