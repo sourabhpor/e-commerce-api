@@ -51,5 +51,4 @@ const login = async (req, res) => {
     res.status(500).json({ status: false, message: "Server error" });
   }
 };
-// kjlas
 export default { register, login };
