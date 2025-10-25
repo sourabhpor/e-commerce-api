@@ -34,18 +34,14 @@ const checkout = async (req, res) => {
         quantity: item.quantity,
         priceAtPurchase: product.price,
       });
-
-      // Reserve stock
       product.reserved += item.quantity;
       await product.save();
     }
-
     if (calculatedTotal !== totalAmount) {
       return res
         .status(400)
         .json({ status: false, message: "Total amount mismatch." });
     }
-
     const newOrder = await Order.create({
       userId,
       items: orderItems,
@@ -54,6 +50,25 @@ const checkout = async (req, res) => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    setTimeout(async () => {
+      try {
+        const orderCheck = await Order.findById(newOrder._id);
+        if (orderCheck && orderCheck.status === "PENDING_PAYMENT") {
+          orderCheck.status = "CANCELLED";
+          await orderCheck.save();
+
+          for (const item of orderCheck.items) {
+            const product = await Product.findById(item.productId);
+            if (product) {
+              product.reserved = Math.max(0, product.reserved - item.quantity);
+              await product.save();
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Auto-cancel failed:", err.message);
+      }
+    }, 15 * 60 * 1000);
 
     return res.status(201).json({
       status: true,
@@ -89,7 +104,9 @@ const payOrder = async (req, res) => {
 
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
-      if (!product) continue;
+      if (!product) {
+        continue;
+      }
       if (product.stock < item.quantity) {
         return res.status(400).json({
           status: false,
@@ -97,6 +114,7 @@ const payOrder = async (req, res) => {
         });
       }
       product.stock -= item.quantity;
+      product.reserved = Math.max(0, product.reserved - item.quantity);
       await product.save();
     }
 
